@@ -4,9 +4,11 @@ import TSCBasic
 import TuistCore
 import TuistSupport
 
+typealias AsyncQueueEventTuple = (dispatcherId: String, id: UUID, date: Date, data: Data, filename: String)
+
 protocol AsyncQueuePersisting {
     /// Reads all the persisted events and returns them.
-    func readAll() -> Single<[(dispatcherId: String, id: UUID, date: Date, data: Data, filename: String)]>
+    func readAll() -> Single<[AsyncQueueEventTuple]>
 
     /// Persiss a given event.
     /// - Parameter event: Event to be persisted.
@@ -15,7 +17,7 @@ protocol AsyncQueuePersisting {
     /// Deletes the given event from disk.
     /// - Parameter event: Event to be deleted.
     func delete<T: AsyncQueueEvent>(event: T) -> Completable
-    
+
     /// Deletes the event with the given filename.
     /// - Parameter filename: Event filename.
     func delete(filename: String) -> Completable
@@ -48,9 +50,9 @@ final class AsyncQueuePersistor: AsyncQueuePersisting {
     }
 
     func delete<T: AsyncQueueEvent>(event: T) -> Completable {
-        return self.delete(filename: self.filename(event: event))
+        delete(filename: filename(event: event))
     }
-    
+
     func delete(filename: String) -> Completable {
         Completable.create { (observer) -> Disposable in
             let path = self.directory.appending(component: filename)
@@ -65,7 +67,7 @@ final class AsyncQueuePersistor: AsyncQueuePersisting {
         }
     }
 
-    func readAll() -> Single<[(dispatcherId: String, id: UUID, date: Date, data: Data, filename: String)]> {
+    func readAll() -> Single<[AsyncQueueEventTuple]> {
         Single.create { (observer) -> Disposable in
             let paths = FileHandler.shared.glob(self.directory, glob: "*.json")
             var events: [(dispatcherId: String, id: UUID, date: Date, data: Data, filename: String)] = []

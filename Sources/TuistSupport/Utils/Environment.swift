@@ -31,7 +31,7 @@ public protocol Environmenting: AnyObject {
 
     /// Returns true if Tuist is running with verbose mode enabled.
     var isVerbose: Bool { get }
-    
+
     /// Returns the path to the directory where the async queue events are persisted.
     var queueDirectory: AbsolutePath { get }
 }

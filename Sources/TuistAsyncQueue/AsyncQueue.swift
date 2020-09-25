@@ -23,14 +23,15 @@ public class AsyncQueue: AsyncQueuing {
     private let executionBlock: () throws -> Void
 
     // MARK: - Init
-    
+
     public static func dispatchQueue() -> DispatchQueue {
         .init(label: "io.tuist.async-queue", qos: .background)
     }
 
     public convenience init(dispatchers: [AsyncQueueDispatcher],
                             dispatchQueue: DispatchQueue = AsyncQueue.dispatchQueue(),
-                            executionBlock: @escaping () throws -> Void) throws {
+                            executionBlock: @escaping () throws -> Void) throws
+    {
         try self.init(queue: Queuer.shared,
                       dispatchQueue: dispatchQueue,
                       executionBlock: executionBlock,
@@ -62,19 +63,19 @@ public class AsyncQueue: AsyncQueuing {
     }
 
     // MARK: - Private
-    
-    private func dispatchPersisted(dispatcherId: String, id: UUID, date: Date, data: Data, filename: String) {
+
+    private func dispatchPersisted(event: AsyncQueueEventTuple) {
         let delete = {
-            self.persistor.delete(filename: filename).subscribe().disposed(by: self.disposeBag)
+            self.persistor.delete(filename: event.filename).subscribe().disposed(by: self.disposeBag)
         }
-        
-        self.dispatchQueue.async {
-            guard let dispatcher = self.dispatchers.first(where: { $0.key == dispatcherId }) else {
+
+        dispatchQueue.async {
+            guard let dispatcher = self.dispatchers.first(where: { $0.key == event.dispatcherId }) else {
                 delete()
                 return
             }
             do {
-                self.dispatch(event: try dispatcher.value.decodeEvent(id: id, date: date, data: data), persist: false)
+                try dispatcher.value.dispatchPersisted(data: event.data)
             } catch {
                 delete()
             }
@@ -85,10 +86,10 @@ public class AsyncQueue: AsyncQueuing {
         let delete = {
             self.persistor.delete(event: event).subscribe().disposed(by: self.disposeBag)
         }
-        
-        guard let dispatcher = self.dispatchers[event.dispatcherId] else {
+
+        guard let dispatcher = dispatchers[event.dispatcherId] else {
             delete()
-            logger.debug("Couldn't find dispatcher with id: \(event.dispatcherId)")
+            logger.error("Couldn't find dispatcher with id: \(event.dispatcherId)")
             return
         }
 
@@ -96,26 +97,26 @@ public class AsyncQueue: AsyncQueuing {
         // process exits. In that case we want to retry again the next time there's
         // opportunity for that.
         if persist {
-            self.persistor.write(event: event)
+            _ = persistor.write(event: event)
         }
-//
-//        let operation = ConcurrentOperation(name: event.id.uuidString) { (operation) in
-//            logger.debug("Dispatching event with ID '\(event.id.uuidString)' to '\(dispatcher.identifier)'")
-//
-//            /// The current implementation doesn't support retries but that's something that we can improve in the future.
-//            operation.maximumRetries = 1
-//
-//            /// After the dispatching operation finishes, we delete the event locally.
-//            defer { self.persistor.delete(event: event) }
-//
-//            do {
-//                try dispatcher.dispatch(event: event)
-//                operation.success = true
-//            } catch {
-//                operation.success = false
-//            }
-//        }
-//        queue.addOperation(operation)
+
+        let operation = ConcurrentOperation(name: event.id.uuidString) { operation in
+            logger.debug("Dispatching event with ID '\(event.id.uuidString)' to '\(dispatcher.identifier)'")
+
+            /// The current implementation doesn't support retries but that's something that we can improve in the future.
+            operation.maximumRetries = 1
+
+            /// After the dispatching operation finishes, we delete the event locally.
+            defer { _ = self.persistor.delete(event: event) }
+
+            do {
+                try dispatcher.dispatch(event: event)
+                operation.success = true
+            } catch {
+                operation.success = false
+            }
+        }
+        queue.addOperation(operation)
     }
 
     private func run() throws {
@@ -140,17 +141,18 @@ public class AsyncQueue: AsyncQueuing {
     }
 
     private func loadEvents() {
-        persistor.readAll()
+        persistor
+            .readAll()
             .subscribeOn(scheduler())
-            .subscribe { (events) in
+            .subscribe(onSuccess: { events in
                 events.forEach(self.dispatchPersisted)
-            } onError: { (error) in
+            }, onError: { error in
                 logger.debug("Error loading persisted events: \(error)")
-            }
+            })
             .disposed(by: disposeBag)
     }
-    
+
     private func scheduler() -> ConcurrentDispatchQueueScheduler {
-        return ConcurrentDispatchQueueScheduler(queue: dispatchQueue)
+        ConcurrentDispatchQueueScheduler(queue: dispatchQueue)
     }
 }

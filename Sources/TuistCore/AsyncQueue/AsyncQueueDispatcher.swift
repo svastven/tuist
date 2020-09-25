@@ -11,9 +11,6 @@ public protocol AsyncQueueDispatcher {
     func dispatch(event: AsyncQueueEvent) throws
 
     /// Dispatch a persisted event.
-    /// - Parameters:
-    ///   - id: Id of the event.
-    ///   - date: Date of the event.
-    ///   - data: Serialized data of the event.
-    func dispatch(id: UUID, date: Date, data: Data)
+    /// - Parameter data: Serialized data of the event.
+    func dispatchPersisted(data: Data) throws
 }
