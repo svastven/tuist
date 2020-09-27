@@ -66,7 +66,7 @@ public class AsyncQueue: AsyncQueuing {
 
     private func dispatchPersisted(event: AsyncQueueEventTuple) {
         let delete = {
-            self.persistor.delete(filename: event.filename).subscribe().disposed(by: self.disposeBag)
+            self.persistor.delete(event: event).subscribe().disposed(by: self.disposeBag)
         }
 
         dispatchQueue.async {

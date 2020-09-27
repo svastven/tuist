@@ -17,10 +17,6 @@ protocol AsyncQueuePersisting {
     /// Deletes the given event from disk.
     /// - Parameter event: Event to be deleted.
     func delete<T: AsyncQueueEvent>(event: T) -> Completable
-
-    /// Deletes the event with the given filename.
-    /// - Parameter filename: Event filename.
-    func delete(filename: String) -> Completable
 }
 
 final class AsyncQueuePersistor: AsyncQueuePersisting {
